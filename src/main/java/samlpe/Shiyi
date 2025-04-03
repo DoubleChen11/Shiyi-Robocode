@@ -1,0 +1,104 @@
+package csy;
+import robocode.*;
+import java.awt.Color;
+import static robocode.util.Utils.normalRelativeAngleDegrees;
+
+
+public class Shiyi extends AdvancedRobot {  // 继承自 AdvancedRobot
+    private boolean movingForward;  // 移动方向控制
+    private int moveDirection = 1; // 移动方向（1 表示前进，-1 表示后退）
+
+    public void run() {
+        // 设置颜色
+        setBodyColor(new Color(0, 200, 0));  // 绿色机身
+        setGunColor(new Color(0, 150, 50));  // 深绿色炮管
+        setRadarColor(new Color(0, 100, 100));  // 深青色雷达
+        setBulletColor(new Color(255, 255, 100));  // 黄色子弹
+        setScanColor(new Color(255, 200, 200));  // 浅红色扫描线
+
+        // 设置雷达和炮管独立转动
+        setAdjustRadarForRobotTurn(true);
+        setAdjustGunForRobotTurn(true);
+
+        // 初始移动模式：动态随机移动
+        while (true) {
+            // 设置长期移动
+            setAhead(40000 * moveDirection);
+            movingForward = (moveDirection == 1);
+
+            // 随机转向
+            if (Math.random() > 0.5) {
+                setTurnRight(90);  // 向右转 90 度
+            } else {
+                setTurnLeft(90);  // 向左转 90 度
+            }
+
+            // 等待转向完成
+            waitFor(new TurnCompleteCondition(this));
+
+            // 持续扫描敌人
+            setTurnRadarRight(360);
+            execute();
+        }
+    }
+
+    public void onScannedRobot(ScannedRobotEvent e) {
+        // 计算敌人绝对方位角
+        double absoluteBearing = getHeading() + e.getBearing();
+
+        // 雷达锁定（1.5倍角度确保持续跟踪）
+        double radarTurn = normalRelativeAngleDegrees(absoluteBearing - getRadarHeading());
+        setTurnRadarRight(radarTurn * 1.5);
+
+        // 炮管对准敌人
+        double gunTurn = normalRelativeAngleDegrees(absoluteBearing - getGunHeading());
+        setTurnGunRight(gunTurn);
+
+        // 根据距离调整火力（3-0.1威力）
+        double firePower = Math.min(500 / e.getDistance(), 3);
+        if (getGunHeat() == 0) {  // 确保炮管冷却
+            fire(firePower);
+        }
+
+        // 智能避碰：当敌人距离过近时改变移动方向
+        if (e.getDistance() < 100) {
+            reverseDirection();
+        }
+
+        execute();
+    }
+
+    public void onHitByBullet(HitByBulletEvent e) {
+        // 被击中时撤退并随机转向
+        reverseDirection();
+        setTurnRight(90 - e.getBearing());
+        execute();
+    }
+
+    public void onHitWall(HitWallEvent e) {
+        // 撞墙时反弹
+        reverseDirection();
+        execute();
+    }
+
+    public void onHitRobot(HitRobotEvent e) {
+        // 碰撞时反弹
+        if (e.isMyFault()) {
+            reverseDirection();
+        }
+    }
+
+    /**
+     * 反转移动方向
+     */
+    private void reverseDirection() {
+        moveDirection *= -1;
+        if (movingForward) {
+            setBack(40000);
+            movingForward = false;
+        } else {
+            setAhead(40000);
+            movingForward = true;
+        }
+    }
+}
